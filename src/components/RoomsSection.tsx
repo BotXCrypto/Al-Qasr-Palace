@@ -1,26 +1,7 @@
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import roomLuxury from "@/assets/room-luxury.jpg";
-import poolView from "@/assets/pool-view.jpg";
-
-const rooms = [
-  {
-    title: "Royal Suite",
-    subtitle: "Ocean View",
-    description: "Immerse yourself in Arabian grandeur with floor-to-ceiling views of the azure sea",
-    image: roomLuxury,
-    price: "From $1,200",
-    features: ["180 sqm", "Private Terrace", "Butler Service"],
-  },
-  {
-    title: "Imperial Villa",
-    subtitle: "Beachfront",
-    description: "Your private sanctuary with direct beach access and infinity pool",
-    image: poolView,
-    price: "From $3,500",
-    features: ["320 sqm", "Private Pool", "Chef's Kitchen"],
-  },
-];
+import { rooms } from "@/data/rooms";
 
 const RoomsSection = () => {
   return (
@@ -84,10 +65,12 @@ const RoomsSection = () => {
                   ))}
                 </div>
 
-                <Button variant="luxury" className="group/btn">
-                  View Details
-                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
-                </Button>
+                <Link to={`/rooms/${room.id}`}>
+                  <Button variant="luxury" className="group/btn">
+                    View Details
+                    <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
+                  </Button>
+                </Link>
               </div>
             </div>
           ))}
