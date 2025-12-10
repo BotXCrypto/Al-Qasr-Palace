@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { rooms, Room } from "@/data/rooms";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface BookingFormProps {
   selectedRoom?: Room;
@@ -28,6 +29,7 @@ interface BookingFormProps {
 }
 
 const BookingForm = ({ selectedRoom, onClose }: BookingFormProps) => {
+  const { user } = useAuth();
   const [checkIn, setCheckIn] = useState<Date>();
   const [checkOut, setCheckOut] = useState<Date>();
   const [adults, setAdults] = useState(2);
@@ -73,7 +75,8 @@ const BookingForm = ({ selectedRoom, onClose }: BookingFormProps) => {
           children,
           special_requests: specialRequests || null,
           total_price: totalPrice,
-          status: 'pending'
+          status: 'pending',
+          user_id: user?.id || null
         })
         .select()
         .single();
