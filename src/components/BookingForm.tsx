@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { rooms, Room } from "@/data/rooms";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface BookingFormProps {
   selectedRoom?: Room;
@@ -45,7 +46,7 @@ const BookingForm = ({ selectedRoom, onClose }: BookingFormProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!checkIn || !checkOut || !roomId || !name || !email) {
+    if (!checkIn || !checkOut || !roomId || !name || !email || !room) {
       toast({
         title: "Missing Information",
         description: "Please fill in all required fields.",
@@ -56,16 +57,65 @@ const BookingForm = ({ selectedRoom, onClose }: BookingFormProps) => {
 
     setIsSubmitting(true);
     
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    toast({
-      title: "Reservation Request Received",
-      description: "Our concierge team will contact you within 24 hours to confirm your booking.",
-    });
-    
-    setIsSubmitting(false);
-    onClose?.();
+    try {
+      // Save reservation to database
+      const { data: reservation, error: dbError } = await supabase
+        .from('reservations')
+        .insert({
+          room_id: roomId,
+          room_name: room.title,
+          guest_name: name,
+          guest_email: email,
+          guest_phone: phone || null,
+          check_in: format(checkIn, 'yyyy-MM-dd'),
+          check_out: format(checkOut, 'yyyy-MM-dd'),
+          adults,
+          children,
+          special_requests: specialRequests || null,
+          total_price: totalPrice,
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (dbError) throw dbError;
+
+      // Send confirmation email
+      const { error: emailError } = await supabase.functions.invoke('send-confirmation-email', {
+        body: {
+          guestName: name,
+          guestEmail: email,
+          roomName: room.title,
+          checkIn: format(checkIn, 'MMMM d, yyyy'),
+          checkOut: format(checkOut, 'MMMM d, yyyy'),
+          adults,
+          children,
+          totalPrice,
+          reservationId: reservation.id
+        }
+      });
+
+      if (emailError) {
+        console.error('Email error:', emailError);
+        // Don't fail the booking if email fails
+      }
+
+      toast({
+        title: "Reservation Confirmed!",
+        description: "A confirmation email has been sent to your inbox.",
+      });
+      
+      onClose?.();
+    } catch (error: any) {
+      console.error('Booking error:', error);
+      toast({
+        title: "Reservation Failed",
+        description: error.message || "Please try again or contact us directly.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
