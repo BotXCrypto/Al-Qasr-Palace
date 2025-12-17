@@ -84,7 +84,36 @@ const AdminDashboard = () => {
     }
   }, [isAdmin]);
 
+  const sendStatusNotification = async (reservation: Reservation, newStatus: string) => {
+    if (newStatus !== 'confirmed' && newStatus !== 'cancelled') return;
+
+    try {
+      const { error } = await supabase.functions.invoke('send-status-notification', {
+        body: {
+          guestName: reservation.guest_name,
+          guestEmail: reservation.guest_email,
+          roomName: reservation.room_name,
+          checkIn: format(new Date(reservation.check_in), 'MMMM d, yyyy'),
+          checkOut: format(new Date(reservation.check_out), 'MMMM d, yyyy'),
+          status: newStatus,
+          reservationId: reservation.id,
+        },
+      });
+
+      if (error) {
+        console.error('Failed to send notification:', error);
+      } else {
+        toast.success(`Notification email sent to ${reservation.guest_email}`);
+      }
+    } catch (err) {
+      console.error('Error sending notification:', err);
+    }
+  };
+
   const updateStatus = async (id: string, status: string) => {
+    const reservation = reservations.find(r => r.id === id);
+    const previousStatus = reservation?.status;
+
     const { error } = await supabase
       .from('reservations')
       .update({ status })
@@ -97,6 +126,11 @@ const AdminDashboard = () => {
       setReservations(prev => 
         prev.map(r => r.id === id ? { ...r, status } : r)
       );
+
+      // Send email notification for confirmed/cancelled status changes
+      if (reservation && (status === 'confirmed' || status === 'cancelled') && previousStatus !== status) {
+        sendStatusNotification(reservation, status);
+      }
     }
   };
 
