@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -20,8 +21,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2, RefreshCw, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { ArrowLeft, Loader2, RefreshCw, Trash2, Search, X } from 'lucide-react';
+import { format, isWithinInterval, parseISO } from 'date-fns';
 
 interface Reservation {
   id: string;
@@ -51,6 +52,12 @@ const AdminDashboard = () => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
+
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   useEffect(() => {
     if (!authLoading) {
@@ -112,6 +119,53 @@ const AdminDashboard = () => {
       };
     }
   }, [isAdmin]);
+
+  // Filtered reservations
+  const filteredReservations = useMemo(() => {
+    return reservations.filter((reservation) => {
+      // Search filter (guest name or email)
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesSearch = 
+          reservation.guest_name.toLowerCase().includes(query) ||
+          reservation.guest_email.toLowerCase().includes(query);
+        if (!matchesSearch) return false;
+      }
+
+      // Status filter
+      if (statusFilter !== 'all' && reservation.status !== statusFilter) {
+        return false;
+      }
+
+      // Date range filter (check-in date)
+      if (dateFrom || dateTo) {
+        const checkInDate = parseISO(reservation.check_in);
+        if (dateFrom && dateTo) {
+          if (!isWithinInterval(checkInDate, { 
+            start: parseISO(dateFrom), 
+            end: parseISO(dateTo) 
+          })) {
+            return false;
+          }
+        } else if (dateFrom) {
+          if (checkInDate < parseISO(dateFrom)) return false;
+        } else if (dateTo) {
+          if (checkInDate > parseISO(dateTo)) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [reservations, searchQuery, statusFilter, dateFrom, dateTo]);
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setDateFrom('');
+    setDateTo('');
+  };
+
+  const hasActiveFilters = searchQuery || statusFilter !== 'all' || dateFrom || dateTo;
 
   const sendStatusNotification = async (reservation: Reservation, newStatus: string) => {
     if (newStatus !== 'confirmed' && newStatus !== 'cancelled') return;
@@ -212,19 +266,74 @@ const AdminDashboard = () => {
       <main className="container mx-auto px-6 py-8">
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="p-6 border-b border-border">
-            <h2 className="font-serif text-xl">All Reservations</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {reservations.length} total reservations
-            </p>
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div>
+                <h2 className="font-serif text-xl">All Reservations</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {filteredReservations.length} of {reservations.length} reservations
+                </p>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="mt-4 flex flex-wrap gap-3">
+              <div className="relative flex-1 min-w-[200px] max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                <Input
+                  placeholder="Search guest name or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  placeholder="From"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-[140px]"
+                />
+                <span className="text-muted-foreground">to</span>
+                <Input
+                  type="date"
+                  placeholder="To"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-[140px]"
+                />
+              </div>
+
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1">
+                  <X size={14} />
+                  Clear
+                </Button>
+              )}
+            </div>
           </div>
 
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="animate-spin text-primary" size={32} />
             </div>
-          ) : reservations.length === 0 ? (
+          ) : filteredReservations.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              No reservations yet
+              {hasActiveFilters ? 'No reservations match your filters' : 'No reservations yet'}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -241,7 +350,7 @@ const AdminDashboard = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reservations.map((reservation) => (
+                  {filteredReservations.map((reservation) => (
                     <TableRow key={reservation.id}>
                       <TableCell>
                         <div>
