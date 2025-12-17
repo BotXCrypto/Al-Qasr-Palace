@@ -81,6 +81,35 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (isAdmin) {
       fetchReservations();
+
+      // Subscribe to real-time updates
+      const channel = supabase
+        .channel('reservations-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'reservations'
+          },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              setReservations(prev => [payload.new as Reservation, ...prev]);
+              toast.info('New reservation received!');
+            } else if (payload.eventType === 'UPDATE') {
+              setReservations(prev => 
+                prev.map(r => r.id === (payload.new as Reservation).id ? payload.new as Reservation : r)
+              );
+            } else if (payload.eventType === 'DELETE') {
+              setReservations(prev => prev.filter(r => r.id !== (payload.old as Reservation).id));
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [isAdmin]);
 
