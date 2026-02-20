@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { ChevronLeft as PaginationChevronLeft, ChevronRight as PaginationChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -58,6 +59,8 @@ const AdminDashboard = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     if (!authLoading) {
@@ -157,6 +160,17 @@ const AdminDashboard = () => {
       return true;
     });
   }, [reservations, searchQuery, statusFilter, dateFrom, dateTo]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, dateFrom, dateTo]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredReservations.length / pageSize));
+  const paginatedReservations = filteredReservations.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -350,7 +364,7 @@ const AdminDashboard = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredReservations.map((reservation) => (
+                  {paginatedReservations.map((reservation) => (
                     <TableRow key={reservation.id}>
                       <TableCell>
                         <div>
@@ -408,6 +422,55 @@ const AdminDashboard = () => {
                   ))}
                 </TableBody>
               </Table>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-border">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredReservations.length)} of {filteredReservations.length}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(p => p - 1)}
+                    >
+                      <PaginationChevronLeft size={16} />
+                    </Button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+                      .reduce<(number | string)[]>((acc, page, idx, arr) => {
+                        if (idx > 0 && page - (arr[idx - 1] as number) > 1) acc.push('...');
+                        acc.push(page);
+                        return acc;
+                      }, [])
+                      .map((item, idx) =>
+                        typeof item === 'string' ? (
+                          <span key={`ellipsis-${idx}`} className="px-2 text-muted-foreground">…</span>
+                        ) : (
+                          <Button
+                            key={item}
+                            variant={currentPage === item ? 'default' : 'outline'}
+                            size="sm"
+                            className="w-9"
+                            onClick={() => setCurrentPage(item)}
+                          >
+                            {item}
+                          </Button>
+                        )
+                      )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(p => p + 1)}
+                    >
+                      <PaginationChevronRight size={16} />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
